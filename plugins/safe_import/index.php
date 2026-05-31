@@ -256,7 +256,7 @@ $recentSessions = safeImportRecentSessions((int)$settings['history_limit']);
                     </div>
                     <div class="form-group">
                         <label><?= __('Batch Name') ?></label>
-                        <input type="text" name="batch_name" class="form-control" value="<?= 'IMPORT-' . date('Ymd-His') ?>">
+                        <input type="text" name="batch_name" class="form-control" value="<?= 'BIBLIO ' . date('Ymd-His') ?>">
                         <small class="form-text text-muted"><?= __('Use a clear batch name so it is easy to find later for rollback.') ?></small>
                     </div>
                     <div class="form-group">

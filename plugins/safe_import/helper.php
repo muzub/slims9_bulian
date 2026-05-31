@@ -285,7 +285,7 @@ function safeImportNormalizeField($value)
 }
 
 /**
- * Read a single CSV row from the given stream using the stored import format.
+ * Read one CSV record with the same delimiter/enclosure settings used by the import form.
  *
  * @param resource $stream
  * @param array{fieldSep:string,fieldEnc:string} $format
@@ -692,7 +692,7 @@ function safeImportDeleteByInt(string $table, string $column, int $value): void
         throw new InvalidArgumentException('Invalid delete target');
     }
 
-    // Table and column names cannot be bound as parameters, so we strictly whitelist
-    // both identifiers before interpolating them and bind only the integer value.
+    // PDO parameter binding does not support SQL identifiers such as table/column names.
+    // Safety here comes from the strict whitelist above; only the integer value is bound.
     DB::getInstance()->prepare("DELETE FROM `{$table}` WHERE `{$column}` = :value")->execute(['value' => $value]);
 }
