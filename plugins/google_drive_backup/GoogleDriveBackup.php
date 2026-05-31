@@ -11,6 +11,7 @@ class GoogleDriveBackup
     public const CONFIG_KEY = 'google_drive_backup';
     public const SESSION_STATE_KEY = 'google_drive_backup_state';
     public const DEFAULT_SCOPE = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email';
+    public const DEFAULT_TOKEN_EXPIRY_SECONDS = 3600;
 
     public static function defaults(): array
     {
@@ -96,7 +97,7 @@ class GoogleDriveBackup
             throw new \RuntimeException(__('Google Drive client ID and client secret must be filled first.'));
         }
 
-        $_SESSION[self::SESSION_STATE_KEY] = utility::createRandomString(32);
+        $_SESSION[self::SESSION_STATE_KEY] = bin2hex(random_bytes(16));
 
         return 'https://accounts.google.com/o/oauth2/v2/auth?' . http_build_query([
             'client_id' => $settings['client_id'],
@@ -182,6 +183,10 @@ class GoogleDriveBackup
         }
 
         $fileHandle = fopen($filePath, 'r');
+        if ($fileHandle === false) {
+            throw new \RuntimeException(__('Failed to open backup file for upload.'));
+        }
+
         try {
             $response = self::httpClient()->post('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink', [
                 'headers' => [
@@ -315,7 +320,7 @@ class GoogleDriveBackup
         $settings['access_token'] = $token['access_token'];
         $settings['refresh_token'] = $token['refresh_token'] ?? $settings['refresh_token'];
         $settings['token_type'] = $token['token_type'] ?? 'Bearer';
-        $settings['expires_at'] = time() + (int) ($token['expires_in'] ?? 3600);
+        $settings['expires_at'] = time() + (int) ($token['expires_in'] ?? self::DEFAULT_TOKEN_EXPIRY_SECONDS);
         $settings['scope'] = $token['scope'] ?? self::DEFAULT_SCOPE;
         $settings['connected_email'] = self::fetchEmail($settings['access_token']) ?: $settings['connected_email'];
 

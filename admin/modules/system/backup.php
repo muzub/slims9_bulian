@@ -211,7 +211,7 @@ if (isset($_POST['itemID']) AND !empty($_POST['itemID']) AND isset($_POST['itemA
     button.attr('disabled', 'disabled').text('<?= __('Uploading') ?>...');
     $.post('<?= $slimsGoogleDrivePage ?>?action=upload', {
       backup_log_id: button.data('id'),
-      tkn: '<?= $_SESSION['token'] ?>'
+      tkn: <?= json_encode($_SESSION['token']) ?>
     }, function(response){
       if (response.status) {
         toastr.success(response.message);
