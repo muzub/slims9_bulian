@@ -17,6 +17,9 @@ if (!$can_read) {
 }
 
 $settingName = 'bulk_member_mailer_settings';
+// Keep upper bounds moderate to avoid very large single request processing.
+$maxBatchSize = 200;
+$maxBatchDelay = 20;
 $defaultSettings = [
     'batch_size' => 25,
     'batch_delay' => 1,
@@ -26,16 +29,17 @@ $defaultSettings = [
 
 $settingStatement = DB::getInstance()->prepare('SELECT setting_value FROM setting WHERE setting_name = ? LIMIT 1');
 $settingStatement->execute([$settingName]);
-$storedSetting = $settingStatement->fetchColumn();
-$storedSetting = $storedSetting ? @unserialize($storedSetting) : [];
+$rawSetting = (string) $settingStatement->fetchColumn();
+$storedSetting = json_decode($rawSetting, true);
 $storedSetting = is_array($storedSetting) ? $storedSetting : [];
 $settings = array_merge($defaultSettings, $storedSetting);
 $isSaveAction = isset($_POST['save_settings']);
 $isSendAction = isset($_POST['send_bulk_mail']);
+$sendConfirmText = json_encode(__('Send email to all members now?'));
 
 if (($isSaveAction || $isSendAction) && $can_write) {
-    $settings['batch_size'] = max(1, min(200, (int) ($_POST['batch_size'] ?? $settings['batch_size'])));
-    $settings['batch_delay'] = max(0, min(20, (int) ($_POST['batch_delay'] ?? $settings['batch_delay'])));
+    $settings['batch_size'] = max(1, min($maxBatchSize, (int) ($_POST['batch_size'] ?? $settings['batch_size'])));
+    $settings['batch_delay'] = max(0, min($maxBatchDelay, (int) ($_POST['batch_delay'] ?? $settings['batch_delay'])));
     $settings['subject'] = trim((string) ($_POST['subject'] ?? $settings['subject']));
     $settings['message'] = trim((string) ($_POST['message'] ?? $settings['message']));
     $settings['subject'] = $settings['subject'] ?: $defaultSettings['subject'];
@@ -44,8 +48,8 @@ if (($isSaveAction || $isSendAction) && $can_write) {
 
 if ($isSaveAction && $can_write) {
     $saveSettingStatement = DB::getInstance()->prepare('REPLACE INTO setting (setting_name, setting_value) VALUES (?, ?)');
-    $saveSettingStatement->execute([$settingName, serialize($settings)]);
-    echo '<div class="alert alert-success">' . __('Settings inserted.') . '</div>';
+    $saveSettingStatement->execute([$settingName, json_encode($settings)]);
+    echo '<div class="alert alert-success">' . __('Settings saved.') . '</div>';
 }
 
 $summary = ['total' => 0, 'success' => 0, 'failed' => 0];
@@ -55,13 +59,23 @@ if ($isSendAction && $can_write) {
     if (is_null(config('mail'))) {
         echo '<div class="alert alert-warning">' . __('E-Mail configuration is not ready!') . '</div>';
     } else {
-        $memberStatement = DB::getInstance()->query('SELECT member_id, member_name, member_email FROM member ORDER BY member_id ASC');
-        $members = $memberStatement->fetchAll(PDO::FETCH_ASSOC);
-        $summary['total'] = count($members);
-        $batches = array_chunk($members, (int) $settings['batch_size']);
+        $batchSize = (int) $settings['batch_size'];
+        $batchDelay = (int) $settings['batch_delay'];
+        $lastMemberId = 0;
+        $memberStatement = DB::getInstance()->prepare('SELECT member_id, member_name, member_email FROM member WHERE member_id > :last_id ORDER BY member_id ASC LIMIT :limit');
 
-        foreach ($batches as $batchIndex => $batchMembers) {
+        while (true) {
+            $memberStatement->bindValue(':last_id', $lastMemberId, PDO::PARAM_INT);
+            $memberStatement->bindValue(':limit', $batchSize, PDO::PARAM_INT);
+            $memberStatement->execute();
+            $batchMembers = $memberStatement->fetchAll(PDO::FETCH_ASSOC);
+            if (empty($batchMembers)) {
+                break;
+            }
+            $lastMemberId = (int) end($batchMembers)['member_id'];
+
             foreach ($batchMembers as $member) {
+                $summary['total']++;
                 $memberEmail = trim((string) $member['member_email']);
                 $memberName = (string) $member['member_name'];
 
@@ -107,17 +121,21 @@ if ($isSendAction && $can_write) {
                     $summary['success']++;
                 } catch (Exception $exception) {
                     $summary['failed']++;
+                    $errorMessage = trim((string) $exception->getMessage());
+                    if ($errorMessage === '') {
+                        $errorMessage = __('Unknown error');
+                    }
                     $failedReport[] = [
                         'member_id' => $member['member_id'],
                         'member_name' => $memberName,
                         'member_email' => $memberEmail,
-                        'reason' => Mail::getInstance()->ErrorInfo ?: $exception->getMessage()
+                        'reason' => $errorMessage
                     ];
                 }
             }
 
-            if ($settings['batch_delay'] > 0 && $batchIndex < count($batches) - 1) {
-                sleep((int) $settings['batch_delay']);
+            if ($batchDelay > 0 && count($batchMembers) === $batchSize) {
+                sleep($batchDelay);
             }
         }
 
@@ -150,12 +168,12 @@ if ($isSendAction && $can_write) {
         <form method="post">
             <div class="form-group">
                 <label><?php echo __('Batch size'); ?></label>
-                <input type="number" min="1" max="200" class="form-control col-md-2" name="batch_size" value="<?php echo (int) $settings['batch_size']; ?>">
+                <input type="number" min="1" max="<?php echo $maxBatchSize; ?>" class="form-control col-md-2" name="batch_size" value="<?php echo (int) $settings['batch_size']; ?>">
                 <small class="text-muted"><?php echo __('Number of members processed in one batch.'); ?></small>
             </div>
             <div class="form-group">
                 <label><?php echo __('Batch delay (seconds)'); ?></label>
-                <input type="number" min="0" max="20" class="form-control col-md-2" name="batch_delay" value="<?php echo (int) $settings['batch_delay']; ?>">
+                <input type="number" min="0" max="<?php echo $maxBatchDelay; ?>" class="form-control col-md-2" name="batch_delay" value="<?php echo (int) $settings['batch_delay']; ?>">
                 <small class="text-muted"><?php echo __('Pause between batches.'); ?></small>
             </div>
             <div class="form-group">
@@ -168,7 +186,7 @@ if ($isSendAction && $can_write) {
                 <small class="text-muted"><?php echo __('Available placeholders: {member_id}, {member_name}, {member_email}'); ?></small>
             </div>
             <button type="submit" class="s-btn btn btn-default" name="save_settings" value="1" <?php echo $can_write ? '' : 'disabled'; ?>><?php echo __('Save'); ?></button>
-            <button type="submit" class="s-btn btn btn-primary" name="send_bulk_mail" value="1" onclick="return confirm('<?php echo __('Send email to all members now?'); ?>')" <?php echo $can_write ? '' : 'disabled'; ?>><?php echo __('Send'); ?></button>
+            <button type="submit" class="s-btn btn btn-primary" name="send_bulk_mail" value="1" onclick="return confirm(<?php echo $sendConfirmText; ?>)" <?php echo $can_write ? '' : 'disabled'; ?>><?php echo __('Send'); ?></button>
         </form>
     </div>
 </div>
