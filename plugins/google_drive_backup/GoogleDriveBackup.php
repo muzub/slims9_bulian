@@ -12,6 +12,7 @@ class GoogleDriveBackup
     public const SESSION_STATE_KEY = 'google_drive_backup_state';
     public const DEFAULT_SCOPE = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email';
     public const DEFAULT_TOKEN_EXPIRY_SECONDS = 3600;
+    public const TOKEN_REFRESH_BUFFER_SECONDS = 60;
 
     public static function defaults(): array
     {
@@ -287,7 +288,7 @@ class GoogleDriveBackup
     {
         $settings = self::settings();
 
-        if (!empty($settings['access_token']) && (int) $settings['expires_at'] > (time() + 60)) {
+        if (!empty($settings['access_token']) && (int) $settings['expires_at'] > (time() + self::TOKEN_REFRESH_BUFFER_SECONDS)) {
             return $settings['access_token'];
         }
 
