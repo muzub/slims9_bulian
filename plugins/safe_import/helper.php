@@ -179,7 +179,7 @@ function safeImportCreateReader(array $format): Reader
         'enclosed_with' => trim($format['fieldEnc'] ?? config('csv.enclosed_with')),
         'record_separator' => [
             'newline' => "\n",
-            'return' => "\t"
+            'return' => "\r"
         ]
     ]);
 }
@@ -287,13 +287,13 @@ function safeImportItemStatements(): array
     ];
 }
 
-function safeImportPrepareItemPayload(array $field, mysqli $dbs): array
+function safeImportPrepareItemPayload(array $field, mysqli $dbs, array &$caches = []): array
 {
     $field = array_pad($field, 19, null);
-    $ctCache = [];
-    $locCache = [];
-    $statusCache = [];
-    $supplierCache = [];
+    $caches['coll_type'] = $caches['coll_type'] ?? [];
+    $caches['location'] = $caches['location'] ?? [];
+    $caches['status'] = $caches['status'] ?? [];
+    $caches['supplier'] = $caches['supplier'] ?? [];
 
     $inputDate = safeImportNormalizeField($field[16]) ?? safeImportNow();
     $lastUpdate = safeImportNormalizeField($field[17]) ?? safeImportNow();
@@ -301,16 +301,16 @@ function safeImportPrepareItemPayload(array $field, mysqli $dbs): array
     return [
         'item_code' => safeImportNormalizeField($field[0]),
         'call_number' => safeImportNormalizeField($field[1]),
-        'coll_type_id' => ($value = safeImportNormalizeField($field[2])) ? utility::getID($dbs, 'mst_coll_type', 'coll_type_id', 'coll_type_name', $value, $ctCache) : null,
+        'coll_type_id' => ($value = safeImportNormalizeField($field[2])) ? utility::getID($dbs, 'mst_coll_type', 'coll_type_id', 'coll_type_name', $value, $caches['coll_type']) : null,
         'inventory_code' => safeImportNormalizeField($field[3]),
         'received_date' => safeImportNormalizeField($field[4]),
-        'supplier_id' => ($value = safeImportNormalizeField($field[5])) ? utility::getID($dbs, 'mst_supplier', 'supplier_id', 'supplier_name', $value, $supplierCache) : null,
+        'supplier_id' => ($value = safeImportNormalizeField($field[5])) ? utility::getID($dbs, 'mst_supplier', 'supplier_id', 'supplier_name', $value, $caches['supplier']) : null,
         'order_no' => safeImportNormalizeField($field[6]),
-        'location_id' => ($value = safeImportNormalizeField($field[7])) ? utility::getID($dbs, 'mst_location', 'location_id', 'location_name', $value, $locCache) : null,
+        'location_id' => ($value = safeImportNormalizeField($field[7])) ? utility::getID($dbs, 'mst_location', 'location_id', 'location_name', $value, $caches['location']) : null,
         'order_date' => safeImportNormalizeField($field[8]),
-        'item_status_id' => ($value = safeImportNormalizeField($field[9])) ? utility::getID($dbs, 'mst_item_status', 'item_status_id', 'item_status_name', $value, $statusCache) : null,
+        'item_status_id' => ($value = safeImportNormalizeField($field[9])) ? utility::getID($dbs, 'mst_item_status', 'item_status_id', 'item_status_name', $value, $caches['status']) : null,
         'site' => safeImportNormalizeField($field[10]),
-        'source' => safeImportNormalizeField($field[11]) ?? 0,
+        'source' => (safeImportNormalizeField($field[11]) ?? 0),
         'invoice' => safeImportNormalizeField($field[12]),
         'price' => safeImportNormalizeField($field[13]),
         'price_currency' => safeImportNormalizeField($field[14]),
@@ -357,6 +357,7 @@ function safeImportRun(int $sessionId, array $settings, mysqli $dbs, $indexer = 
     $errors = [];
     $headerSkipped = false;
     $biblioCaches = ['gmd' => [], 'publisher' => [], 'language' => [], 'place' => [], 'author' => [], 'topic' => []];
+    $itemCaches = ['coll_type' => [], 'location' => [], 'status' => [], 'supplier' => []];
     $biblioStatements = $session['import_type'] === 'biblio' ? safeImportBiblioStatements() : [];
     $itemStatements = $session['import_type'] === 'item' ? safeImportItemStatements() : [];
 
@@ -379,7 +380,7 @@ function safeImportRun(int $sessionId, array $settings, mysqli $dbs, $indexer = 
 
             try {
                 if ($session['import_type'] === 'item') {
-                    $payload = safeImportPrepareItemPayload($field, $dbs);
+                    $payload = safeImportPrepareItemPayload($field, $dbs, $itemCaches);
                     if (empty($payload['item_code'])) {
                         throw new RuntimeException(__('Item code is required'));
                     }
@@ -483,6 +484,12 @@ function safeImportRun(int $sessionId, array $settings, mysqli $dbs, $indexer = 
             } catch (Throwable $error) {
                 $skipped++;
                 $errors[] = __('Row').' '.$rowNumber.': '.$error->getMessage();
+                safeImportUpdateSession($sessionId, [
+                    'processed_rows' => $processed,
+                    'success_rows' => $success,
+                    'skipped_rows' => $skipped,
+                    'updated_at' => safeImportNow()
+                ]);
                 if ($settings['stop_on_error']) {
                     throw new RuntimeException(end($errors));
                 }
