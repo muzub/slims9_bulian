@@ -701,6 +701,26 @@ $sysconf['database_backup'] = [
   ]
 ];
 
+// Google Drive integration for database backup.
+// This feature is designed for browser-based admin usage,
+// without requiring server or hosting level access.
+$sysconf['google_drive_backup'] = [
+  'enabled' => false,
+  'auto_upload' => false,
+  'client_id' => '',
+  'client_secret' => '',
+  'folder_id' => '',
+  'filename_prefix' => '',
+  'redirect_uri' => '',
+  'access_token' => '',
+  'refresh_token' => '',
+  'token_type' => 'Bearer',
+  'expires_at' => 0,
+  'scope' => '',
+  'connected_email' => '',
+  'uploads' => []
+];
+
 // load global settings again for override tinfo setting
 utility::loadSettings($dbs);
 
