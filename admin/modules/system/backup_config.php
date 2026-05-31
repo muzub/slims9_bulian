@@ -156,7 +156,7 @@ if ($googleDriveStatus !== null) {
 }
 
 $confirm = __('Are you sure you want to make it automatically on first login?. It will take longer to complete if your SLiMS has a large collection.');
-$autoUploadConfirm = __('Automatic upload needs an active Google Drive connection and runs only when an admin starts backup from the browser.');
+$autoUploadConfirm = __('Automatic upload requires an active Google Drive connection and only runs when an admin starts backup from the browser.');
 echo <<<HTML
 <script>
     $('#showadv').click(function() {

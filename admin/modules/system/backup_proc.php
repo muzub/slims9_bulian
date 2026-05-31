@@ -142,10 +142,11 @@ if (isset($_POST['start']) && isset($_POST['tkn']) && $_POST['tkn'] === $_SESSIO
                 $googleDriveStatus = \SLiMS\Plugins\GoogleDriveBackup\GoogleDriveBackup::status();
                 if ($googleDriveStatus['enabled'] && $googleDriveStatus['auto_upload']) {
                     try {
+                        $uploadSuccessMessage = __('Backup uploaded to Google Drive.');
                         outputWithFlush(color(__('Uploading to Google Drive...'), 'info'));
                         $upload = \SLiMS\Plugins\GoogleDriveBackup\GoogleDriveBackup::uploadBackup($data['backup_file'], $backupLogId);
-                        $output .= "\n" . ($upload['message'] ?? __('Backup uploaded to Google Drive.'));
-                        outputWithFlush(color($upload['message'] ?? __('Backup uploaded to Google Drive.'), 'success'));
+                        $output .= "\n" . ($upload['message'] ?? $uploadSuccessMessage);
+                        outputWithFlush(color($upload['message'] ?? $uploadSuccessMessage, 'success'));
                     } catch (\Throwable $throwable) {
                         $output .= "\n" . sprintf(__('Google Drive upload failed: %s'), $throwable->getMessage());
                         outputWithFlush(color(sprintf(__('Google Drive upload failed: %s'), $throwable->getMessage()), 'error'));

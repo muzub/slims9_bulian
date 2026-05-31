@@ -181,24 +181,31 @@ class GoogleDriveBackup
             $metadata['parents'] = [$settings['folder_id']];
         }
 
-        $response = self::httpClient()->post('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink', [
-            'headers' => [
-                'Authorization' => 'Bearer ' . $accessToken
-            ],
-            'multipart' => [
-                [
-                    'name' => 'metadata',
-                    'contents' => json_encode($metadata),
-                    'headers' => ['Content-Type' => 'application/json; charset=UTF-8']
+        $fileHandle = fopen($filePath, 'r');
+        try {
+            $response = self::httpClient()->post('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink', [
+                'headers' => [
+                    'Authorization' => 'Bearer ' . $accessToken
                 ],
-                [
-                    'name' => 'file',
-                    'contents' => fopen($filePath, 'r'),
-                    'filename' => basename($filePath),
-                    'headers' => ['Content-Type' => function_exists('mime_content_type') ? mime_content_type($filePath) : 'application/octet-stream']
+                'multipart' => [
+                    [
+                        'name' => 'metadata',
+                        'contents' => json_encode($metadata),
+                        'headers' => ['Content-Type' => 'application/json; charset=UTF-8']
+                    ],
+                    [
+                        'name' => 'file',
+                        'contents' => $fileHandle,
+                        'filename' => basename($filePath),
+                        'headers' => ['Content-Type' => function_exists('mime_content_type') ? mime_content_type($filePath) : 'application/octet-stream']
+                    ]
                 ]
-            ]
-        ]);
+            ]);
+        } finally {
+            if (is_resource($fileHandle)) {
+                fclose($fileHandle);
+            }
+        }
 
         $body = json_decode((string) $response->getBody(), true) ?: [];
         if (empty($body['id'])) {

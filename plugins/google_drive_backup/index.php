@@ -38,8 +38,12 @@ if ($action === 'upload') {
         }
 
         $backupLogId = (int) ($_POST['backup_log_id'] ?? 0);
-        $query = $dbs->query('SELECT backup_file FROM backup_log WHERE backup_log_id=' . $backupLogId);
-        $filePath = $query ? ($query->fetch_row()[0] ?? '') : '';
+        $statement = $dbs->prepare('SELECT backup_file FROM backup_log WHERE backup_log_id = ?');
+        $statement->bind_param('i', $backupLogId);
+        $statement->execute();
+        $statement->bind_result($filePath);
+        $statement->fetch();
+        $statement->close();
 
         if (empty($filePath)) {
             throw new \RuntimeException(__('Backup record was not found.'));
