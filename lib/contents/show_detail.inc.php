@@ -74,7 +74,6 @@ if (isset($_GET['inXML']) AND !empty($_GET['inXML'])) {
     $detail_id = intval($_GET['id']);
     // include detail library and template
     include LIB.'detail.inc.php';
-    \SLiMS\Plugins::getInstance();
     if ($sysconf['comment']['enable']) {
 		  include LIB.'comment.inc.php';
     }

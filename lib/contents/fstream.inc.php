@@ -34,14 +34,6 @@ if (isset($_POST['init'])) {
   exit;
 }
 
-$digital_drm_bootstrap = SWB . 'plugins/digital_drm_reader/bootstrap.php';
-if (file_exists($digital_drm_bootstrap)) {
-  require_once $digital_drm_bootstrap;
-  if (function_exists('digital_drm_reader_init')) {
-    digital_drm_reader_init();
-  }
-}
-
 /* File Viewer */
 
 // get file ID
@@ -61,15 +53,6 @@ $file_q = $dbs->query($sql_q);
 if ($file_q->num_rows == 0) throw new Exception('Data attachment not found!' . trim((isDev() ? '&nbsp;: ' . $dbs->error : '')));
 
 $file_d = $file_q->fetch_assoc();
-
-if (function_exists('digital_drm_reader_direct_access_allowed') && !digital_drm_reader_direct_access_allowed($biblioID, $fileID)) {
-  if (utility::isMemberLogin()) {
-    header('Location: ' . SWB . 'plugins/digital_drm_reader/open.php?bid=' . $biblioID . '&aid=' . $fileID . '&fid=' . $fileID);
-  } else {
-    header('Location: index.php?p=member');
-  }
-  exit;
-}
 
 
 Plugins::getInstance()->execute('fstream_all_before_download', ['data' => array('fileID' => $fileID, 'memberID' => $memberID, 'userID' => $userID, 'biblioID' => $biblioID, 'file_d' => $file_d)]);
