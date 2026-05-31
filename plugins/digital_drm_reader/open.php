@@ -29,7 +29,7 @@ if (!$attachment) {
     die(__('Digital attachment not found'));
 }
 
-$map = digital_drm_reader_get_map_by_attachment($attachmentId);
+$map = digital_drm_reader_get_map_by_attachment($fileId);
 if (!$map) {
     header('Location: ' . SWB . 'index.php?p=fstream&fid=' . $fileId . '&bid=' . $biblioId);
     exit;

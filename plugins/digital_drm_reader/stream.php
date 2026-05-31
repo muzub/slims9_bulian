@@ -34,13 +34,13 @@ if (!$attachment) {
 }
 
 $filePath = digital_drm_reader_file_path($attachment);
-if (!file_exists($filePath) || !is_readable($filePath)) {
+if (!$filePath || !file_exists($filePath) || !is_readable($filePath)) {
     http_response_code(404);
     exit('File not found');
 }
 
 $allowDownload = ((int)$session['allow_download'] === 1);
-$downloadRequested = isset($_GET['download']) && $_GET['download'] == '1';
+$downloadRequested = isset($_GET['download']) && $_GET['download'] === '1';
 if ($downloadRequested && !$allowDownload) {
     http_response_code(403);
     exit('Download not allowed');
@@ -51,10 +51,14 @@ digital_drm_reader_send_nocache_headers();
 $mimeType = !empty($attachment['mime_type']) ? $attachment['mime_type'] : 'application/octet-stream';
 $fileSize = filesize($filePath);
 $filename = basename($attachment['file_name']);
+$safeFilename = preg_replace('/[^A-Za-z0-9._-]/', '_', $filename);
+if ($safeFilename === '') {
+    $safeFilename = 'digital-file';
+}
 
 if ($downloadRequested) {
     header('Content-Type: application/octet-stream');
-    header('Content-Disposition: attachment; filename="' . str_replace('"', '', $filename) . '"');
+    header('Content-Disposition: attachment; filename="' . $safeFilename . '"; filename*=UTF-8\'\'' . rawurlencode($safeFilename));
     header('Content-Length: ' . $fileSize);
     readfile($filePath);
     exit;
@@ -64,7 +68,14 @@ header('Content-Type: ' . $mimeType);
 header('Accept-Ranges: bytes');
 
 if (isset($_SERVER['HTTP_RANGE'])) {
-    list($unit, $range) = explode('=', $_SERVER['HTTP_RANGE'], 2);
+    $rangeParts = explode('=', $_SERVER['HTTP_RANGE'], 2);
+    if (count($rangeParts) === 2) {
+        list($unit, $range) = $rangeParts;
+    } else {
+        $unit = '';
+        $range = '';
+    }
+
     if ($unit === 'bytes') {
         list($start, $end) = array_pad(explode('-', $range, 2), 2, '');
         $start = ($start === '') ? 0 : (int)$start;
@@ -79,6 +90,10 @@ if (isset($_SERVER['HTTP_RANGE'])) {
             header('Content-Length: ' . $length);
 
             $fp = fopen($filePath, 'rb');
+            if ($fp === false) {
+                http_response_code(500);
+                exit('Unable to open stream');
+            }
             fseek($fp, $start);
             $chunk = 8192;
             $remaining = $length;

@@ -52,14 +52,15 @@ if ($canWrite && isset($_POST['drm_action'])) {
             $viewMode = 'other';
         }
 
-        $attachmentQ = $dbs->query("SELECT att_id, biblio_id, file_id FROM biblio_attachment WHERE att_id={$attachmentId} AND biblio_id={$biblioId} LIMIT 1");
+        $attachmentQ = $dbs->query("SELECT biblio_id, file_id FROM biblio_attachment WHERE file_id={$attachmentId} AND biblio_id={$biblioId} LIMIT 1");
         if (!$attachmentQ || $attachmentQ->num_rows < 1) {
             $message = __('Attachment not found for selected bibliography');
             $error = true;
         } else {
             $att = $attachmentQ->fetch_assoc();
+            $mapFileId = (int)$att['file_id'];
             $ok = $dbs->query("INSERT INTO digital_drm_map (biblio_id, attachment_id, file_id, profile_id, view_mode)
-                VALUES ({$biblioId}, {$attachmentId}, " . (int)$att['file_id'] . ", {$profileId}, '" . $dbs->escape_string($viewMode) . "')
+                VALUES ({$biblioId}, {$mapFileId}, {$mapFileId}, {$profileId}, '" . $dbs->escape_string($viewMode) . "')
                 ON DUPLICATE KEY UPDATE
                     biblio_id=VALUES(biblio_id),
                     file_id=VALUES(file_id),
@@ -89,8 +90,11 @@ if ($profileQ) {
 $biblioIdFilter = isset($_GET['biblio_id']) ? (int)$_GET['biblio_id'] : 0;
 $attachments = [];
 if ($biblioIdFilter > 0) {
-    $attachmentQ = $dbs->query("SELECT att.att_id, att.title, att.file_att, att.file_id
-        FROM biblio_attachment AS att WHERE att.biblio_id={$biblioIdFilter} ORDER BY att.att_id DESC");
+    $attachmentQ = $dbs->query("SELECT att.file_id, f.file_title, f.file_name
+        FROM biblio_attachment AS att
+        INNER JOIN files AS f ON f.file_id = att.file_id
+        WHERE att.biblio_id={$biblioIdFilter}
+        ORDER BY att.file_id DESC");
     if ($attachmentQ) {
         while ($row = $attachmentQ->fetch_assoc()) {
             $attachments[] = $row;
@@ -99,11 +103,11 @@ if ($biblioIdFilter > 0) {
 }
 
 $maps = [];
-$mapQ = $dbs->query("SELECT m.*, p.profile_name, b.title AS biblio_title, att.title AS attachment_title, att.file_att
+$mapQ = $dbs->query("SELECT m.*, p.profile_name, b.title AS biblio_title, f.file_title, f.file_name
     FROM digital_drm_map AS m
     INNER JOIN digital_drm_profile AS p ON p.profile_id = m.profile_id
     LEFT JOIN biblio AS b ON b.biblio_id = m.biblio_id
-    LEFT JOIN biblio_attachment AS att ON att.att_id = m.attachment_id
+    LEFT JOIN files AS f ON f.file_id = m.file_id
     ORDER BY m.map_id DESC");
 if ($mapQ) {
     while ($row = $mapQ->fetch_assoc()) {
@@ -153,8 +157,8 @@ if ($canWrite) {
     echo '<div class="form-group mr-2 mb-2"><select class="form-control" name="attachment_id" required>';
     echo '<option value="">' . __('Select Attachment') . '</option>';
     foreach ($attachments as $attachment) {
-        $label = '#' . (int)$attachment['att_id'] . ' - ' . ($attachment['title'] ?: $attachment['file_att']);
-        echo '<option value="' . (int)$attachment['att_id'] . '">' . htmlspecialchars($label) . '</option>';
+        $label = '#' . (int)$attachment['file_id'] . ' - ' . ($attachment['file_title'] ?: $attachment['file_name']);
+        echo '<option value="' . (int)$attachment['file_id'] . '">' . htmlspecialchars($label) . '</option>';
     }
     echo '</select></div>';
 
@@ -193,8 +197,8 @@ if (count($maps) < 1) {
 } else {
     echo '<table class="table table-sm"><thead><tr><th>ID</th><th>' . __('Biblio ID') . '</th><th>' . __('Title') . '</th><th>' . __('Attachment') . '</th><th>' . __('Profile') . '</th><th>' . __('View Mode') . '</th></tr></thead><tbody>';
     foreach ($maps as $map) {
-        $attachmentName = $map['attachment_title'] ?: $map['file_att'];
-        echo '<tr><td>' . (int)$map['map_id'] . '</td><td>' . (int)$map['biblio_id'] . '</td><td>' . htmlspecialchars((string)$map['biblio_title']) . '</td><td>#' . (int)$map['attachment_id'] . ' ' . htmlspecialchars((string)$attachmentName) . '</td><td>' . htmlspecialchars($map['profile_name']) . '</td><td>' . htmlspecialchars($map['view_mode']) . '</td></tr>';
+        $attachmentName = $map['file_title'] ?: $map['file_name'];
+        echo '<tr><td>' . (int)$map['map_id'] . '</td><td>' . (int)$map['biblio_id'] . '</td><td>' . htmlspecialchars((string)$map['biblio_title']) . '</td><td>#' . (int)$map['file_id'] . ' ' . htmlspecialchars((string)$attachmentName) . '</td><td>' . htmlspecialchars($map['profile_name']) . '</td><td>' . htmlspecialchars($map['view_mode']) . '</td></tr>';
     }
     echo '</tbody></table>';
 }

@@ -22,7 +22,7 @@ if (!function_exists('digital_drm_reader_init')) {
             access_duration_days INT UNSIGNED NOT NULL DEFAULT 1,
             max_parallel_sessions INT UNSIGNED NOT NULL DEFAULT 1,
             created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-        ) ENGINE=MyISAM DEFAULT CHARSET=utf8");
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
         $dbs->query("CREATE TABLE IF NOT EXISTS digital_drm_map (
             map_id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -35,7 +35,7 @@ if (!function_exists('digital_drm_reader_init')) {
             UNIQUE KEY drm_unique_attachment (attachment_id),
             KEY drm_biblio_file (biblio_id, file_id),
             KEY drm_profile_id (profile_id)
-        ) ENGINE=MyISAM DEFAULT CHARSET=utf8");
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
         $dbs->query("CREATE TABLE IF NOT EXISTS digital_drm_session (
             session_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -50,12 +50,12 @@ if (!function_exists('digital_drm_reader_init')) {
             UNIQUE KEY drm_unique_token (token),
             KEY drm_member_attachment (member_id, attachment_id),
             KEY drm_expires (expires_at)
-        ) ENGINE=MyISAM DEFAULT CHARSET=utf8");
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
         $dbs->query("CREATE TABLE IF NOT EXISTS digital_drm_setting (
             setting_key VARCHAR(80) PRIMARY KEY,
             setting_value VARCHAR(255) NOT NULL
-        ) ENGINE=MyISAM DEFAULT CHARSET=utf8");
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
         $dbs->query("INSERT IGNORE INTO digital_drm_setting (setting_key, setting_value) VALUES ('require_active_loan', '0')");
     }
@@ -124,7 +124,7 @@ if (!function_exists('digital_drm_reader_init')) {
         $query = "SELECT m.*, p.profile_name, p.print_limit, p.allow_download, p.access_duration_days, p.max_parallel_sessions
             FROM digital_drm_map AS m
             INNER JOIN digital_drm_profile AS p ON p.profile_id = m.profile_id
-            WHERE m.attachment_id={$attachmentId}
+            WHERE m.file_id={$attachmentId} OR m.attachment_id={$attachmentId}
             LIMIT 1";
         $res = $dbs->query($query);
         $cache[$attachmentId] = ($res && $res->num_rows > 0) ? $res->fetch_assoc() : null;
@@ -156,17 +156,18 @@ if (!function_exists('digital_drm_reader_init')) {
 
     function digital_drm_reader_secure_link(array $attachment, $defaultUrl)
     {
-        if (empty($attachment['att_id']) || empty($attachment['biblio_id']) || empty($attachment['file_id'])) {
+        if (empty($attachment['biblio_id']) || empty($attachment['file_id'])) {
             return $defaultUrl;
         }
 
-        $map = digital_drm_reader_get_map_by_attachment((int) $attachment['att_id']);
+        $attachmentId = !empty($attachment['att_id']) ? (int)$attachment['att_id'] : (int)$attachment['file_id'];
+        $map = digital_drm_reader_get_map_by_attachment($attachmentId);
         if (!$map) {
             return $defaultUrl;
         }
 
         return SWB . 'plugins/digital_drm_reader/open.php?bid=' . (int)$attachment['biblio_id']
-            . '&aid=' . (int)$attachment['att_id']
+            . '&aid=' . $attachmentId
             . '&fid=' . (int)$attachment['file_id'];
     }
 
@@ -242,7 +243,11 @@ if (!function_exists('digital_drm_reader_init')) {
         }
 
         $durationDays = max(1, (int)$map['access_duration_days']);
-        $token = bin2hex(random_bytes(32));
+        try {
+            $token = bin2hex(random_bytes(32));
+        } catch (\Exception $e) {
+            return [false, __('Unable to generate secure token')];
+        }
         $fingerprint = digital_drm_reader_fingerprint();
 
         $tokenEsc = digital_drm_reader_escape($token);
@@ -308,9 +313,21 @@ if (!function_exists('digital_drm_reader_init')) {
             return null;
         }
 
-        $query = "SELECT att.*, f.* FROM biblio_attachment AS att
+        $query = "SELECT
+                att.biblio_id,
+                att.file_id,
+                att.placement,
+                att.access_type,
+                att.access_limit,
+                f.file_dir,
+                f.file_name,
+                f.file_title,
+                f.file_desc,
+                f.file_url,
+                f.mime_type
+            FROM biblio_attachment AS att
             INNER JOIN files AS f ON f.file_id = att.file_id
-            WHERE att.biblio_id={$biblioId} AND att.att_id={$attachmentId} AND att.file_id={$fileId}
+            WHERE att.biblio_id={$biblioId} AND att.file_id={$fileId}
             LIMIT 1";
         $res = $dbs->query($query);
         if (!$res || $res->num_rows < 1) {
@@ -328,12 +345,23 @@ if (!function_exists('digital_drm_reader_init')) {
         }
 
         $biblioId = (int)$session['biblio_id'];
-        $attachmentId = (int)$session['attachment_id'];
         $fileId = (int)$session['file_id'];
 
-        $query = "SELECT att.*, f.* FROM biblio_attachment AS att
+        $query = "SELECT
+                att.biblio_id,
+                att.file_id,
+                att.placement,
+                att.access_type,
+                att.access_limit,
+                f.file_dir,
+                f.file_name,
+                f.file_title,
+                f.file_desc,
+                f.file_url,
+                f.mime_type
+            FROM biblio_attachment AS att
             INNER JOIN files AS f ON f.file_id = att.file_id
-            WHERE att.biblio_id={$biblioId} AND att.att_id={$attachmentId} AND att.file_id={$fileId}
+            WHERE att.biblio_id={$biblioId} AND att.file_id={$fileId}
             LIMIT 1";
         $res = $dbs->query($query);
         if (!$res || $res->num_rows < 1) {
@@ -345,10 +373,27 @@ if (!function_exists('digital_drm_reader_init')) {
 
     function digital_drm_reader_file_path(array $attachment)
     {
-        if (!empty($attachment['file_dir'])) {
-            return REPOBS . '/' . trim($attachment['file_dir'], '/') . '/' . $attachment['file_name'];
+        $repositoryRoot = realpath(REPOBS);
+        if (!$repositoryRoot) {
+            return null;
         }
-        return REPOBS . '/' . $attachment['file_name'];
+
+        if (!empty($attachment['file_dir'])) {
+            $candidate = REPOBS . '/' . trim($attachment['file_dir'], '/') . '/' . $attachment['file_name'];
+        } else {
+            $candidate = REPOBS . '/' . $attachment['file_name'];
+        }
+
+        $resolved = realpath($candidate);
+        if (!$resolved) {
+            return null;
+        }
+
+        if (strpos($resolved, $repositoryRoot) !== 0) {
+            return null;
+        }
+
+        return $resolved;
     }
 
     function digital_drm_reader_send_nocache_headers()

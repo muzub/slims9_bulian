@@ -65,7 +65,7 @@ $file_d = $file_q->fetch_assoc();
 
 if (function_exists('digital_drm_reader_direct_access_allowed') && !digital_drm_reader_direct_access_allowed($biblioID, $fileID)) {
     if (utility::isMemberLogin()) {
-        header('Location: ' . SWB . 'plugins/digital_drm_reader/open.php?bid=' . $biblioID . '&aid=' . $file_d['att_id'] . '&fid=' . $fileID);
+        header('Location: ' . SWB . 'plugins/digital_drm_reader/open.php?bid=' . $biblioID . '&aid=' . $fileID . '&fid=' . $fileID);
     } else {
         header('Location: index.php?p=member');
     }
