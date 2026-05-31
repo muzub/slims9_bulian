@@ -284,6 +284,14 @@ function safeImportNormalizeField($value)
     return $value === '' ? null : $value;
 }
 
+/**
+ * Read a single CSV row from the given stream using the stored import format.
+ *
+ * @param resource $stream
+ * @param array{fieldSep:string,fieldEnc:string} $format
+ * @param int $maxChars
+ * @return array<int, string|null>|false
+ */
 function safeImportCsvRow($stream, array $format, int $maxChars = 102400)
 {
     return fgetcsv($stream, $maxChars, trim($format['fieldSep']), trim($format['fieldEnc']));
@@ -684,5 +692,7 @@ function safeImportDeleteByInt(string $table, string $column, int $value): void
         throw new InvalidArgumentException('Invalid delete target');
     }
 
+    // Table and column names cannot be bound as parameters, so we strictly whitelist
+    // both identifiers before interpolating them and bind only the integer value.
     DB::getInstance()->prepare("DELETE FROM `{$table}` WHERE `{$column}` = :value")->execute(['value' => $value]);
 }
