@@ -38,11 +38,6 @@ require SIMBIO.'simbio_GUI/paging/simbio_paging.inc.php';
 require SIMBIO.'simbio_DB/datagrid/simbio_dbgrid.inc.php';
 require SIMBIO.'simbio_DB/simbio_dbop.inc.php';
 
-$googleDriveHelper = SB . 'plugins/google_drive_backup/GoogleDriveBackup.php';
-if (file_exists($googleDriveHelper)) {
-    require_once $googleDriveHelper;
-}
-
 // create token in session
 $_SESSION['token'] = utility::createRandomString(32);
 
@@ -57,13 +52,6 @@ if (!($can_read AND $can_write)) {
 if($_SESSION['uid'] != 1){
   $can_write = false;
 }
-
-$slimsGoogleDriveStatus = class_exists('\SLiMS\Plugins\GoogleDriveBackup\GoogleDriveBackup')
-    ? \SLiMS\Plugins\GoogleDriveBackup\GoogleDriveBackup::status()
-    : ['enabled' => false, 'connected' => false, 'auto_upload' => false];
-$slimsGoogleDrivePage = class_exists('\SLiMS\Plugins\GoogleDriveBackup\GoogleDriveBackup')
-    ? \SLiMS\Plugins\GoogleDriveBackup\GoogleDriveBackup::pageUrl()
-    : SWB . 'plugins/google_drive_backup/index.php';
 
 /* DOWNLOAD OPERATION */
 if(isset($_GET['action']) && isset($_GET['id']) && $_GET['action'] == 'download'){
@@ -104,9 +92,6 @@ if (isset($_POST['itemID']) AND !empty($_POST['itemID']) AND isset($_POST['itemA
       if(file_exists($file)){
          @unlink($file);
       } 
-      if (class_exists('\SLiMS\Plugins\GoogleDriveBackup\GoogleDriveBackup')) {
-        \SLiMS\Plugins\GoogleDriveBackup\GoogleDriveBackup::removeUpload((int) $itemID);
-      }
       //delete record
       $sql_op = new simbio_dbop($dbs);
       if (!$sql_op->delete('backup_log', "backup_log_id=$itemID")) {
@@ -142,23 +127,8 @@ if (isset($_POST['itemID']) AND !empty($_POST['itemID']) AND isset($_POST['itemA
         <button id="startBackup" class="notAJAX btn btn-success d-block mb-1"><?php echo __('Start New Backup'); ?></button>
         <?php if ($_SESSION['uid'] == 1): ?>
         <a href="<?= MWB ?>system/backup_config.php" title="<?= __('Database Backup Configuration') ?>" class="notAJAX openPopUp btn btn-secondary d-block mb-1"><?php echo __('Backup Configuration'); ?></a>
-        <a href="<?= $slimsGoogleDrivePage ?>" title="<?= __('Google Drive Backup') ?>" class="btn btn-info d-block mb-1 ml-1"><?php echo __('Google Drive'); ?></a>
         <?php endif; ?>
       </div>
-      <?php if ($slimsGoogleDriveStatus['enabled']): ?>
-      <div class="alert alert-light border mb-2">
-        <strong><?= __('Google Drive') ?>:</strong>
-        <?php
-            if ($slimsGoogleDriveStatus['connected']) {
-                echo $slimsGoogleDriveStatus['auto_upload']
-                    ? __('Automatic upload is active after every backup.')
-                    : __('Manual upload buttons are available for each backup file.');
-            } else {
-                echo __('Integration is enabled, but Google Drive is not connected yet.');
-            }
-        ?>
-      </div>
-      <?php endif; ?>
       <div>
         <input type="checkbox" value="yes" id="activateVerbose"/> <label><?= __('Verbose process')?></label>
       </div>
@@ -204,28 +174,6 @@ if (isset($_POST['itemID']) AND !empty($_POST['itemID']) AND isset($_POST['itemA
       input.val('false');
     }
   });
-
-  $(document).on('click', '.upload-gdrive', function(){
-    let button = $(this);
-
-    button.attr('disabled', 'disabled').text('<?= __('Uploading') ?>...');
-    $.post('<?= $slimsGoogleDrivePage ?>?action=upload', {
-      backup_log_id: button.data('id'),
-      tkn: <?= json_encode($_SESSION['token']) ?>
-    }, function(response){
-      if (response.status) {
-        toastr.success(response.message);
-        $('#mainContent').simbioAJAX('<?= MWB ?>system/backup.php');
-        return;
-      }
-
-      button.removeAttr('disabled').text('<?= __('Upload to Google Drive') ?>');
-      toastr.error(response.message || '<?= __('Upload failed') ?>');
-    }, 'json').fail(function(){
-      button.removeAttr('disabled').text('<?= __('Upload to Google Drive') ?>');
-      toastr.error('<?= __('Upload failed') ?>');
-    });
-  });
 </script>
 <?php
 
@@ -256,7 +204,6 @@ $datagrid->chbox_form_URL = $_SERVER['PHP_SELF'];
 $datagrid->modifyColumnContent(4, 'callback{showFileSize}'); 
 
 function showFilesize($obj_db,$array_data) {
-    global $slimsGoogleDriveStatus;
     $str = __('File not found');
     $decimal  = 2;
     if(file_exists($array_data[3])){
@@ -266,15 +213,6 @@ function showFilesize($obj_db,$array_data) {
         $sz = 'KMGT';
         $str  = sprintf("%.{$decimal}f ", $file / pow(1024, $factor)) . @$sz[$factor - 1] . 'B';
         $str .= '&nbsp;<a class="btn btn-sm btn-info pull-right" href="'.MWB.'system/backup.php?action=download&id='.$array_data[0].'" target="_SELF">'.__('Download').'</a>';
-
-        if (class_exists('\SLiMS\Plugins\GoogleDriveBackup\GoogleDriveBackup') && $slimsGoogleDriveStatus['enabled']) {
-          $upload = \SLiMS\Plugins\GoogleDriveBackup\GoogleDriveBackup::upload((int) $array_data[0]);
-          if (!empty($upload['url'])) {
-            $str .= '&nbsp;<a class="btn btn-sm btn-outline-primary pull-right mr-1" target="_blank" rel="noopener" href="'.simbio_security::xssFree($upload['url']).'">'.__('Open in Google Drive').'</a>';
-          } elseif ($slimsGoogleDriveStatus['connected'] && !$slimsGoogleDriveStatus['auto_upload']) {
-            $str .= '&nbsp;<button type="button" class="btn btn-sm btn-primary pull-right mr-1 upload-gdrive" data-id="'.(int) $array_data[0].'">'.__('Upload to Google Drive').'</button>';
-          }
-        }
     }
   return $str;
 }

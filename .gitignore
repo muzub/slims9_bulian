@@ -25,8 +25,6 @@ slims8_akasia.sublime-workspace
 
 plugins/*
 !plugins/read_counter/
-!plugins/google_drive_backup/
-!plugins/google_drive_backup/*
 
 template/*
 
