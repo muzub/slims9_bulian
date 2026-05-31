@@ -301,12 +301,13 @@ function safeImportBiblioStatements(): array
 
 function safeImportItemStatements(): array
 {
+    $updateItem = DB::getInstance()->prepare('UPDATE item SET biblio_id = :biblio_id, item_code = :item_code, call_number = :call_number, coll_type_id = :coll_type_id, inventory_code = :inventory_code, received_date = :received_date, supplier_id = :supplier_id, order_no = :order_no, location_id = :location_id, order_date = :order_date, item_status_id = :item_status_id, site = :site, source = :source, invoice = :invoice, price = :price, price_currency = :price_currency, invoice_date = :invoice_date, input_date = :input_date, last_update = :last_update, uid = :uid WHERE item_id = :item_id');
+
     return [
         'find_biblio' => DB::getInstance()->prepare('SELECT biblio_id FROM biblio WHERE title = :title LIMIT 1'),
         'find_item' => DB::getInstance()->prepare('SELECT * FROM item WHERE item_code = :item_code LIMIT 1'),
         'insert_item' => DB::getInstance()->prepare('INSERT INTO item (biblio_id, item_code, call_number, coll_type_id, inventory_code, received_date, supplier_id, order_no, location_id, order_date, item_status_id, site, source, invoice, price, price_currency, invoice_date, input_date, last_update, uid) VALUES (:biblio_id, :item_code, :call_number, :coll_type_id, :inventory_code, :received_date, :supplier_id, :order_no, :location_id, :order_date, :item_status_id, :site, :source, :invoice, :price, :price_currency, :invoice_date, :input_date, :last_update, :uid)'),
-        'update_item' => DB::getInstance()->prepare('UPDATE item SET biblio_id = :biblio_id, item_code = :item_code, call_number = :call_number, coll_type_id = :coll_type_id, inventory_code = :inventory_code, received_date = :received_date, supplier_id = :supplier_id, order_no = :order_no, location_id = :location_id, order_date = :order_date, item_status_id = :item_status_id, site = :site, source = :source, invoice = :invoice, price = :price, price_currency = :price_currency, invoice_date = :invoice_date, input_date = :input_date, last_update = :last_update, uid = :uid WHERE item_id = :item_id'),
-        'restore_item' => DB::getInstance()->prepare('UPDATE item SET biblio_id = :biblio_id, item_code = :item_code, call_number = :call_number, coll_type_id = :coll_type_id, inventory_code = :inventory_code, received_date = :received_date, supplier_id = :supplier_id, order_no = :order_no, location_id = :location_id, order_date = :order_date, item_status_id = :item_status_id, site = :site, source = :source, invoice = :invoice, price = :price, price_currency = :price_currency, invoice_date = :invoice_date, input_date = :input_date, last_update = :last_update, uid = :uid WHERE item_id = :item_id'),
+        'update_item' => $updateItem,
         'delete_item' => DB::getInstance()->prepare('DELETE FROM item WHERE item_id = :item_id')
     ];
 }
@@ -334,7 +335,7 @@ function safeImportPrepareItemPayload(array $field, mysqli $dbs, array &$caches 
         'order_date' => safeImportNormalizeField($field[8]),
         'item_status_id' => ($value = safeImportNormalizeField($field[9])) ? utility::getID($dbs, 'mst_item_status', 'item_status_id', 'item_status_name', $value, $caches['status']) : null,
         'site' => safeImportNormalizeField($field[10]),
-        'source' => (safeImportNormalizeField($field[11]) ?? 0),
+        'source' => safeImportNormalizeField($field[11]) ?? 0,
         'invoice' => safeImportNormalizeField($field[12]),
         'price' => safeImportNormalizeField($field[13]),
         'price_currency' => safeImportNormalizeField($field[14]),
@@ -561,8 +562,6 @@ function safeImportRun(int $sessionId, array $settings, mysqli $dbs, $indexer = 
 
 function safeImportRollback(int $sessionId, mysqli $dbs, $indexer = null): array
 {
-    require_once SIMBIO.'simbio_DB/simbio_dbop.inc.php';
-    $sqlOp = new simbio_dbop($dbs);
     $session = safeImportGetSession($sessionId);
     if (!$session) throw new RuntimeException(__('Rollback session not found'));
     if ($session['status'] === 'rolled_back') throw new RuntimeException(__('This import session has already been rolled back'));
@@ -582,7 +581,7 @@ function safeImportRollback(int $sessionId, mysqli $dbs, $indexer = null): array
             }
 
             if ($entry['action_type'] === 'update' && !empty($snapshot['item_id'])) {
-                $restoreStatements['restore_item']->execute([
+                $restoreStatements['update_item']->execute([
                     'biblio_id' => $snapshot['biblio_id'],
                     'item_code' => $snapshot['item_code'],
                     'call_number' => $snapshot['call_number'],
@@ -605,7 +604,7 @@ function safeImportRollback(int $sessionId, mysqli $dbs, $indexer = null): array
                     'uid' => $snapshot['uid'],
                     'item_id' => $snapshot['item_id']
                 ]);
-                $rollbackCount += $restoreStatements['restore_item']->rowCount();
+                $rollbackCount += $restoreStatements['update_item']->rowCount();
             }
 
             continue;
@@ -613,18 +612,18 @@ function safeImportRollback(int $sessionId, mysqli $dbs, $indexer = null): array
 
         if ($entry['entity_type'] === 'biblio' && $entry['action_type'] === 'insert' && !empty($entry['entity_id'])) {
             $biblioId = (int)$entry['entity_id'];
-            $sqlOp->delete('item', 'biblio_id='.$biblioId);
-            $sqlOp->delete('biblio_topic', 'biblio_id='.$biblioId);
-            $sqlOp->delete('biblio_author', 'biblio_id='.$biblioId);
-            $sqlOp->delete('biblio_attachment', 'biblio_id='.$biblioId);
-            $sqlOp->delete('biblio_relation', 'biblio_id='.$biblioId);
-
-            $serialQuery = $dbs->query('SELECT serial_id FROM serial WHERE biblio_id='.$biblioId);
-            while ($serialQuery && ($serial = $serialQuery->fetch_assoc())) {
-                $sqlOp->delete('kardex', 'serial_id='.(int)$serial['serial_id']);
+            foreach (['item', 'biblio_topic', 'biblio_author', 'biblio_attachment', 'biblio_relation'] as $table) {
+                safeImportDeleteByInt($table, 'biblio_id', $biblioId);
             }
-            $sqlOp->delete('serial', 'biblio_id='.$biblioId);
-            $sqlOp->delete('biblio', 'biblio_id='.$biblioId);
+
+            $serialQuery = DB::getInstance()->prepare('SELECT serial_id FROM serial WHERE biblio_id = :biblio_id');
+            $serialQuery->execute(['biblio_id' => $biblioId]);
+            while ($serial = $serialQuery->fetch(PDO::FETCH_ASSOC)) {
+                safeImportDeleteByInt('kardex', 'serial_id', (int)$serial['serial_id']);
+            }
+
+            safeImportDeleteByInt('serial', 'biblio_id', $biblioId);
+            safeImportDeleteByInt('biblio', 'biblio_id', $biblioId);
             if ($indexer) $indexer->deleteIndex($biblioId);
             $rollbackCount++;
         }
@@ -666,4 +665,24 @@ function safeImportStatusClass(string $status): string
         'running' => 'info',
         default => 'light'
     };
+}
+
+function safeImportDeleteByInt(string $table, string $column, int $value): void
+{
+    $allowed = [
+        'item' => ['biblio_id'],
+        'biblio_topic' => ['biblio_id'],
+        'biblio_author' => ['biblio_id'],
+        'biblio_attachment' => ['biblio_id'],
+        'biblio_relation' => ['biblio_id'],
+        'kardex' => ['serial_id'],
+        'serial' => ['biblio_id'],
+        'biblio' => ['biblio_id']
+    ];
+
+    if (!isset($allowed[$table]) || !in_array($column, $allowed[$table], true)) {
+        throw new InvalidArgumentException('Invalid delete target');
+    }
+
+    DB::getInstance()->prepare("DELETE FROM `{$table}` WHERE `{$column}` = :value")->execute(['value' => $value]);
 }
