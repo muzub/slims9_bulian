@@ -40,11 +40,6 @@ require SB.'admin/default/session.inc.php';
 require SB.'admin/default/session_check.inc.php';
 require SIMBIO.'simbio_DB/simbio_dbop.inc.php';
 
-$googleDriveHelper = SB . 'plugins/google_drive_backup/GoogleDriveBackup.php';
-if (file_exists($googleDriveHelper)) {
-    require_once $googleDriveHelper;
-}
-
 // privileges checking
 $can_read = utility::havePrivilege('system', 'r');
 $can_write = utility::havePrivilege('system', 'w');
@@ -136,23 +131,6 @@ if (isset($_POST['start']) && isset($_POST['tkn']) && $_POST['tkn'] === $_SESSIO
             // input log to database
             $sql_op = new simbio_dbop($dbs);
             $sql_op->insert('backup_log', $data);
-            $backupLogId = (int) $dbs->insert_id;
-
-            if (class_exists('\SLiMS\Plugins\GoogleDriveBackup\GoogleDriveBackup')) {
-                $googleDriveStatus = \SLiMS\Plugins\GoogleDriveBackup\GoogleDriveBackup::status();
-                if ($googleDriveStatus['enabled'] && $googleDriveStatus['auto_upload']) {
-                    try {
-                        $uploadSuccessMessage = __('Backup uploaded to Google Drive.');
-                        outputWithFlush(color(__('Uploading to Google Drive...'), 'info'));
-                        $upload = \SLiMS\Plugins\GoogleDriveBackup\GoogleDriveBackup::uploadBackup($data['backup_file'], $backupLogId);
-                        $output .= "\n" . ($upload['message'] ?? $uploadSuccessMessage);
-                        outputWithFlush(color($upload['message'] ?? $uploadSuccessMessage, 'success'));
-                    } catch (\Throwable $throwable) {
-                        $output .= "\n" . sprintf(__('Google Drive upload failed: %s'), $throwable->getMessage());
-                        outputWithFlush(color(sprintf(__('Google Drive upload failed: %s'), $throwable->getMessage()), 'error'));
-                    }
-                }
-            }
             outputWithFlush(color($output, 'success'));
         } catch (\Exception $e) {
             $error = true;
@@ -182,3 +160,4 @@ if (isset($_POST['start']) && isset($_POST['tkn']) && $_POST['tkn'] === $_SESSIO
     echo '<script type="text/javascript">setTimeout(() => { top.$(\'#mainContent\').simbioAJAX(\''.MWB.'system/backup.php\'); }, ' . ($_POST['verbose'] == 'no' ? 0 : 5000) . ')</script>';
     exit();
 }
+
