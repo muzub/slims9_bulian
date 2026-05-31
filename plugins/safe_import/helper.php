@@ -144,12 +144,36 @@ function safeImportUpdateSession(int $sessionId, array $data): void
 {
     if (empty($data)) return;
 
+    $allowedColumns = [
+        'batch_name',
+        'import_type',
+        'file_name',
+        'temp_file',
+        'format_options',
+        'status',
+        'processed_rows',
+        'success_rows',
+        'skipped_rows',
+        'rollback_rows',
+        'notes',
+        'error_message',
+        'uid',
+        'created_at',
+        'updated_at',
+        'started_at',
+        'finished_at',
+        'rolled_back_at'
+    ];
+
     $fields = [];
     $params = ['id' => $sessionId];
     foreach ($data as $column => $value) {
+        if (!in_array($column, $allowedColumns, true)) continue;
         $fields[] = "`{$column}` = :{$column}";
         $params[$column] = $value;
     }
+
+    if (empty($fields)) return;
 
     DB::getInstance()->prepare('UPDATE '.SAFE_IMPORT_SESSION_TABLE.' SET '.implode(', ', $fields).' WHERE id = :id')->execute($params);
 }
