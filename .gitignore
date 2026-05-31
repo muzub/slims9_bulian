@@ -25,6 +25,7 @@ slims8_akasia.sublime-workspace
 
 plugins/*
 !plugins/read_counter/
+!plugins/digital_drm_reader/
 
 template/*
 
