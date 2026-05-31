@@ -59,13 +59,14 @@ if (isset($_POST['counter'])) {
     list($memberId, $memberName, $institution, $image) = $visitor->getData();
 
     // default message
-    $message = $memberName . __(', thank you for inserting your data to our visitor log');
+    $safeMemberName = htmlspecialchars((string)$memberName, ENT_QUOTES, 'UTF-8');
+    $message = $safeMemberName . __(', thank you for inserting your data to our visitor log');
 
     // Expire message
     if ($visitor->isMemberExpire()) $message = '<div class="error visitor-error">'.__('Your membership already EXPIRED, please renew/extend your membership immediately').'</div>';
 
     // already checkin message
-    if ($visitor->isAlreadyCheckIn()) $message = __('Welcome back').' '.$memberName.'.';
+    if ($visitor->isAlreadyCheckIn()) $message = __('Welcome back').' '.$safeMemberName.'.';
 
   // For guest access institution data is required!
   } else if ($visitor->isInstitutionEmpty()) {
