@@ -26,6 +26,8 @@ slims8_akasia.sublime-workspace
 
 plugins/*
 !plugins/read_counter/
+!plugins/bulk_member_mailer/
+!plugins/bulk_member_mailer/*
 
 template/*
 
