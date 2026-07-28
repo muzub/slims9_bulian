@@ -34,6 +34,14 @@ if (!defined('INDEX_AUTH')) {
 } elseif (INDEX_AUTH != 1) {
     die("can not access this file directly");
 }
+
+$digital_drm_bootstrap = SWB . 'plugins/digital_drm_reader/bootstrap.php';
+if (file_exists($digital_drm_bootstrap)) {
+    require_once $digital_drm_bootstrap;
+    if (function_exists('digital_drm_reader_init')) {
+        digital_drm_reader_init();
+    }
+}
 \SLiMS\Plugins::getInstance()->execute('fstream_vid_before_download');
 
 // get file ID
@@ -54,6 +62,16 @@ if ($file_q->num_rows < 1) {
 }
 // check if file exists
 $file_d = $file_q->fetch_assoc();
+
+if (function_exists('digital_drm_reader_direct_access_allowed') && !digital_drm_reader_direct_access_allowed($biblioID, $fileID)) {
+    if (utility::isMemberLogin()) {
+        header('Location: ' . SWB . 'plugins/digital_drm_reader/open.php?bid=' . $biblioID . '&aid=' . $fileID . '&fid=' . $fileID);
+    } else {
+        header('Location: index.php?p=member');
+    }
+    exit;
+}
+
 $file_loc = str_ireplace('/', DS, $file_d['file_dir']).DS.$file_d['file_name'];
 $mime = $file_d['mime_type'];
 $repository = Storage::repository();

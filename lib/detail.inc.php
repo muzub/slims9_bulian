@@ -142,6 +142,13 @@ class detail
           return false;
         }
         foreach ($this->record_detail['attachments'] as $attachment_d) {
+          $stream_url = './index.php?p=fstream&fid='.$attachment_d['file_id'].'&bid='.$attachment_d['biblio_id'];
+          $multimedia_url = './index.php?p=multimediastream&fid='.$attachment_d['file_id'].'&bid='.$attachment_d['biblio_id'];
+          if (function_exists('digital_drm_reader_secure_link')) {
+              $stream_url = digital_drm_reader_secure_link($attachment_d, $stream_url);
+              $multimedia_url = digital_drm_reader_secure_link($attachment_d, $multimedia_url);
+          }
+
           // Restricted attachment check
           if (!is_null($attachment_d['access_limit'])) {
               // need member login access
@@ -156,30 +163,30 @@ class detail
           }
 
           if ($attachment_d['mime_type'] == 'application/pdf') {
-            $_output .= '<li class="attachment-pdf" style="list-style-image: url(images/labels/ebooks.png)" itemscope itemtype="http://schema.org/MediaObject"><a itemprop="name" property="name" '.(utility::isMobileBrowser() ? 'target="_blank"' : 'class="openPopUp"').' title="'.$attachment_d['file_title'].'" href="./index.php?p=fstream&fid='.$attachment_d['file_id'].'&bid='.$attachment_d['biblio_id'].'" width="780" height="520">'.$attachment_d['file_title'].'</a>';
+            $_output .= '<li class="attachment-pdf" style="list-style-image: url(images/labels/ebooks.png)" itemscope itemtype="http://schema.org/MediaObject"><a itemprop="name" property="name" '.(utility::isMobileBrowser() ? 'target="_blank"' : 'class="openPopUp"').' title="'.$attachment_d['file_title'].'" href="'.$stream_url.'" width="780" height="520">'.$attachment_d['file_title'].'</a>';
             $_output .= '<div class="attachment-desc" itemprop="description" property="description">'.$attachment_d['file_desc'].'</div>';
             if (trim($attachment_d['file_url']) != '') { $_output .= '<div><a href="'.trim($attachment_d['file_url']).'" itemprop="url" property="url" title="Other Resource related to this book" target="_blank">Other Resource Link</a></div>'; }
             $_output .= '</li>';
           } else if (preg_match('@(video)/.+@i', $attachment_d['mime_type'])) {
               switch ($attachment_d['placement']) {
                   case 'embed':
-                      $_output .= '<li style="list-style: none">'.$this->embed('./index.php?p=multimediastream&fid='.$attachment_d['file_id'].'&bid='.$attachment_d['biblio_id']).'</li>';
+                      $_output .= '<li style="list-style: none">'.$this->embed($multimedia_url).'</li>';
                       break;
                   case 'popup':
                       $_output .= '<li class="attachment-audio-video" itemprop="video" property="video" itemscope itemtype="http://schema.org/VideoObject" style="list-style-image: url(images/labels/auvi.png)">'
-                          .'<a itemprop="name" property="name" class="openPopUp" title="'.$attachment_d['file_title'].'" href="./index.php?p=multimediastream&fid='.$attachment_d['file_id'].'&bid='.$attachment_d['biblio_id'].'" width="640" height="480">'.$attachment_d['file_title'].'</a>';
+                          .'<a itemprop="name" property="name" class="openPopUp" title="'.$attachment_d['file_title'].'" href="'.$multimedia_url.'" width="640" height="480">'.$attachment_d['file_title'].'</a>';
                       $_output .= '<div class="attachment-desc" itemprop="description" property="description">'.$attachment_d['file_desc'].'</div>';
                       break;
                   default:
                       $_output .= '<li class="attachment-audio-video" itemprop="video" property="video" itemscope itemtype="http://schema.org/VideoObject" style="list-style-image: url(images/labels/auvi.png)">'
-                          .'<a itemprop="name" property="name" title="'.$attachment_d['file_title'].'" href="./index.php?p=multimediastream&fid='.$attachment_d['file_id'].'&bid='.$attachment_d['biblio_id'].'" target="_blank">'.$attachment_d['file_title'].'</a>';
+                          .'<a itemprop="name" property="name" title="'.$attachment_d['file_title'].'" href="'.$multimedia_url.'" target="_blank">'.$attachment_d['file_title'].'</a>';
                       $_output .= '<div class="attachment-desc" itemprop="description" property="description">'.$attachment_d['file_desc'].'</div>';
               }
             if (trim($attachment_d['file_url']) != '') { $_output .= '<div><a href="'.trim($attachment_d['file_url']).'" itemprop="url" property="url" title="Other Resource Link" target="_blank">Other Resource Link</a></div>'; }
             $_output .= '</li>';
           } else if (preg_match('@(audio)/.+@i', $attachment_d['mime_type'])) {
             $_output .= '<li class="attachment-audio-audio" itemprop="audio" property="audio" itemscope itemtype="http://schema.org/AudioObject" style="list-style-image: url(images/labels/auvi.png)">'
-              .'<a itemprop="name" property="name" class="openPopUp" title="'.$attachment_d['file_title'].'" href="./index.php?p=multimediastream&fid='.$attachment_d['file_id'].'&bid='.$attachment_d['biblio_id'].'" width="640" height="480">'.$attachment_d['file_title'].'</a>';
+              .'<a itemprop="name" property="name" class="openPopUp" title="'.$attachment_d['file_title'].'" href="'.$multimedia_url.'" width="640" height="480">'.$attachment_d['file_title'].'</a>';
             $_output .= '<div class="attachment-desc" itemprop="description" property="description">'.$attachment_d['file_desc'].'</div>';
             if (trim($attachment_d['file_url']) != '') { $_output .= '<div><a href="'.trim($attachment_d['file_url']).'" itemprop="url" property="url" title="Other Resource Link" target="_blank">Other Resource Link</a></div>'; }
             $_output .= '</li>';
@@ -205,11 +212,11 @@ class detail
             if ($imgheight > 400) {
               $imgheight = 400;
             }
-            $_output .= '<li class="attachment-image" style="list-style-image: url(images/labels/ebooks.png)" itemprop="image" itemscope itemtype="http://schema.org/ImageObject"><a itemprop="name" property="name" class="openPopUp" title="'.$attachment_d['file_title'].'" href="index.php?p=fstream&fid='.$attachment_d['file_id'].'&bid='.$attachment_d['biblio_id'].'" width="'.$imgwidth.'" height="'.$imgheight.'">'.$attachment_d['file_title'].'</a>';
+            $_output .= '<li class="attachment-image" style="list-style-image: url(images/labels/ebooks.png)" itemprop="image" itemscope itemtype="http://schema.org/ImageObject"><a itemprop="name" property="name" class="openPopUp" title="'.$attachment_d['file_title'].'" href="'.$stream_url.'" width="'.$imgwidth.'" height="'.$imgheight.'">'.$attachment_d['file_title'].'</a>';
             if (trim($attachment_d['file_url']) != '') { $_output .= ' [<a href="'.trim($attachment_d['file_url']).'" itemprop="url" property="url" title="Other Resource related to this file" target="_blank" style="font-size: 90%;">Other Resource Link</a>]'; }
             $_output .= '<div class="attachment-desc" itemprop="description" property="description">'.$attachment_d['file_desc'].'</div></li>';
           } else {
-            $_output .= '<li class="attachment-image" style="list-style-image: url(images/labels/ebooks.png)" itemscope itemtype="http://schema.org/MediaObject"><a itemprop="name" property="name" title="Click To View File" href="index.php?p=fstream&fid='.$attachment_d['file_id'].'&bid='.$attachment_d['biblio_id'].'" target="_blank">'.$attachment_d['file_title'].'</a>';
+            $_output .= '<li class="attachment-image" style="list-style-image: url(images/labels/ebooks.png)" itemscope itemtype="http://schema.org/MediaObject"><a itemprop="name" property="name" title="Click To View File" href="'.$stream_url.'" target="_blank">'.$attachment_d['file_title'].'</a>';
             if (trim($attachment_d['file_url']) != '') { $_output .= ' [<a href="'.trim($attachment_d['file_url']).'" itemprop="url" property="url" title="Other Resource related to this file" target="_blank" style="font-size: 90%;">Other Resource Link</a>]'; }
             $_output .= '<div class="attachment-desc" itemprop="description" property="description">'.$attachment_d['file_desc'].'</div></li>';
           }
