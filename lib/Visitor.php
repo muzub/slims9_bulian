@@ -62,6 +62,8 @@ class Visitor
     public function record($memberId)
     {
         $db = DB::getInstance();
+        $memberId = trim(strip_tags((string)$memberId));
+        $memberId = mb_substr($memberId, 0, 255);
         //DB::debug();
 
         try {
@@ -87,6 +89,7 @@ class Visitor
                 // unset image and expire status
                 unset($data[4]);
                 unset($data[2]);
+                $data[1] = mb_substr(trim(strip_tags((string)$data[1])), 0, 255);
 
                 $this->data = array_values($data);
                 Plugins::getInstance()->execute('MEMBER_ON_VISIT', ['data' => $statement->fetch(\PDO::FETCH_ASSOC)]);
@@ -94,8 +97,9 @@ class Visitor
             // Guest
             else
             {
+                $institutionInput = $_POST['institution'] ?? '';
                 // institution check for guest
-                if (empty(trim($_POST['institution'])))
+                if (empty(trim($institutionInput)))
                 {
                     $this->institutionEmpty = true;
                     return $this;
@@ -103,7 +107,9 @@ class Visitor
 
                 // default non member photos
                 $this->image = 'non_member.png';
-                $this->data = [ null, $memberId,trim($_POST['institution'])];
+                $institution = trim(strip_tags((string)$institutionInput));
+                $institution = mb_substr($institution, 0, 100);
+                $this->data = [ null, $memberId, $institution];
                 Plugins::getInstance()->execute('NON_MEMBER_ON_VISIT', ['data' => array_slice($this->data, 1)]);
             }
 
